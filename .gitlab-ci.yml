@@ -1,0 +1,106 @@
+stages:
+  - build
+  - test
+  - release
+
+variables:
+  DOCKER_BUILDKIT: 1
+  PLATFORMS: linux/amd64,linux/arm64/v8
+  GIT_STRATEGY: clone
+
+  PIPELINE_IMAGE_PRODUCTION: $CI_REGISTRY_IMAGE/production:$CI_PIPELINE_ID
+  PIPELINE_IMAGE_TESTNET: $CI_REGISTRY_IMAGE/testnet:$CI_PIPELINE_ID
+
+  LATEST_IMAGE_PRODUCTION: $CI_REGISTRY_IMAGE/production
+  LATEST_IMAGE_TESTNET: $CI_REGISTRY_IMAGE/testnet
+
+  REVISION_IMAGE_PRODUCTION: $CI_REGISTRY_IMAGE/production:$CI_COMMIT_SHA
+  REVISION_IMAGE_TESTNET: $CI_REGISTRY_IMAGE/testnet:$CI_COMMIT_SHA
+
+.builder_context: &create_builder_context
+  before_script:
+    - echo $CI_DEPLOYER_PASSWORD | docker login -u $CI_DEPLOYER_USER --password-stdin registry.gitlab.com
+    - docker context create builder-context
+    - docker buildx create --name builderx --driver docker-container --use builder-context
+
+.regctl: &regctl_install
+  before_script:
+    - echo $CI_DEPLOYER_PASSWORD | docker login -u $CI_DEPLOYER_USER --password-stdin registry.gitlab.com
+    - apk update && apk add curl
+    - curl -LO https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64
+    - chmod +x regctl-linux-amd64
+    - mv regctl-linux-amd64 /usr/local/bin/regctl
+
+build:testnet:
+  stage: build
+  <<: *create_builder_context
+  only:
+    refs:
+      - master
+  script:
+    - docker build
+      --provenance false
+      --build-arg VCS_REF=$CI_COMMIT_SHA
+      --build-arg NODE_ENV=$TESTNET_NODE_ENV
+      --build-arg API=$TESTNET_API
+      --cache-from $LATEST_IMAGE_TESTNET
+      --tag $PIPELINE_IMAGE_TESTNET
+      --push
+      -f .docker/web/Dockerfile
+      .
+
+build:production:
+  stage: build
+  <<: *create_builder_context
+  only:
+    refs:
+      - master
+  script:
+    - docker build
+      --provenance false
+      --build-arg VCS_REF=$CI_COMMIT_SHA
+      --build-arg NODE_ENV=$PRODUCTION_NODE_ENV
+      --build-arg API=$PRODUCTION_API
+      --cache-from $LATEST_IMAGE_PRODUCTION
+      --tag $PIPELINE_IMAGE_PRODUCTION
+      --push
+      -f .docker/web/Dockerfile
+      .
+
+test:build-testnet:
+  stage: test
+  only:
+    refs:
+      - master
+  image: $PIPELINE_IMAGE_TESTNET
+  script:
+    - ls -halF /app/node_modules
+
+test:build-production:
+  stage: test
+  only:
+    refs:
+      - master
+  image: $PIPELINE_IMAGE_PRODUCTION
+  script:
+    - ls -halF /app/node_modules
+
+release:testnet:
+  stage: release
+  <<: *regctl_install
+  only:
+    refs:
+      - master
+  script:
+    - regctl image copy ${PIPELINE_IMAGE_TESTNET} ${LATEST_IMAGE_TESTNET}
+    - regctl image copy ${PIPELINE_IMAGE_TESTNET} ${REVISION_IMAGE_TESTNET}
+
+release:production:
+  stage: release
+  <<: *regctl_install
+  only:
+    refs:
+      - master
+  script:
+    - regctl image copy ${PIPELINE_IMAGE_PRODUCTION} ${LATEST_IMAGE_PRODUCTION}
+    - regctl image copy ${PIPELINE_IMAGE_PRODUCTION} ${REVISION_IMAGE_PRODUCTION}
