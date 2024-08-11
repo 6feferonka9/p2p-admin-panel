@@ -1,16 +1,14 @@
-export const actionBanUser = async (API: string, formData: FormData, cookie: string) => {
+import apiRequestHandler from "@/functions/apiRequestHandler";
+
+export const actionBanUser = async (formData: FormData, request: Request) => {
+
   // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-  return await fetch(`${API}/admin/auth/${formData.get('userId')}/ban`, {
-    method: 'POST',
-    body: JSON.stringify({
-      reason: formData.get('reason'),
-      type: formData.get('type'),
-      password: formData.get('password'),
-      confirmUsername: formData.get('confirmUsername')
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      'Cookie': cookie
-    },
-  });
-}
+  return apiRequestHandler<undefined>('POST', `/admin/auth/${formData.get('userId')}/ban`, {
+    reason: formData.get('reason'),
+    type: formData.get('type'),
+    password: formData.get('password'),
+    confirmUsername: formData.get('confirmUsername')
+  },
+    request
+  );
+} 

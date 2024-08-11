@@ -2,14 +2,10 @@ import { DashboardFiltering } from "./ui/filtering";
 import { UsersListCard } from "./ui/card";
 import { useLoaderData } from "@remix-run/react";
 import { LoaderFunctionArgs } from "@remix-run/node";
-const { API } = process.env;
 import { PaginatedUsers } from '@p2pcoins/api-sdk'
+import apiRequestHandler from "@/functions/apiRequestHandler";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  if (API === undefined) {
-    throw new Error('Missing API .env variable');
-  }
-
   const url = new URL(request.url);
   const queryString = url.searchParams.toString();
   const queryObject = Object.entries(Object.fromEntries(url.searchParams)).reduce((prev, cur) => {
@@ -19,32 +15,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }, {}) as Record<string, 'string' | undefined>;
 
-  const apiRequest = await fetch(`${API}/admin/users?${queryString}`, {
-    method: 'GET',
-    headers: {
-      'Cookie': request.headers.get('cookie') ?? ''
-    }
-  });
 
-  if (apiRequest.status === 200) {
-    const apiData = await apiRequest.json() as PaginatedUsers;
+  try {
+    const apiRequestData = await apiRequestHandler<PaginatedUsers>('GET', `/admin/users?${queryString}`, undefined, request);
 
     return {
       queryObject,
       users: {
-        ...apiData,
-        data: apiData.data.map(user => ({
+        ...apiRequestData,
+        data: apiRequestData.data.map(user => ({
           ...user,
           createdAt: new Date(user.createdAt).toLocaleString('sk').split(' ').slice(0, -1).join(''),
           lastOnlineAt: new Date(user.lastOnlineAt ?? '').toLocaleString('sk').split(' ').slice(0, -1).join('')
         }))
       },
     }
-  }
+  } catch (error) {
+    console.error(error);
 
-  return {
-    queryObject,
-    users: null,
+    return {
+      queryObject,
+      users: null,
+    }
   }
 };
 

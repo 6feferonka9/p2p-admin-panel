@@ -11,63 +11,50 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { actionImportReviews } from "./actionImportReviews";
 import { actionBanUser } from "./actionBanUser";
-const { API } = process.env;
+import apiRequestHandler from "@/functions/apiRequestHandler";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-  if (API === undefined) {
-    throw new Error('Missing API .env variable');
-  }
-
-  const apiRequest = await fetch(`${API}/admin/users/${params.id ?? ''}`, {
-    method: 'GET',
-    headers: {
-      'Cookie': request.headers.get('cookie') ?? ''
-    }
-  });
-
-  if (apiRequest.status === 200) {
-    const apiData = await apiRequest.json() as AdminViewUserDetail;
+  try {
+    const apiRequestData = await apiRequestHandler<AdminViewUserDetail>('GET', `/admin/users/${params.id ?? ''}`, undefined, request);
 
     return json({
-      user: apiData
+      user: apiRequestData
+    })
+  } catch (error) {
+    console.error(error);
+
+    return json({
+      user: null,
     })
   }
-
-  return json({
-    user: null,
-  })
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const formAction = formData.get('formAction') as null | 'REPUTATION' | 'BAN';
 
-  if (API === undefined) {
-    throw new Error('Missing API .env variable');
-  }
+  try {
+    await (async () => {
+      switch (formAction) {
+        case 'REPUTATION': {
+          await actionImportReviews(formData, request);
+          break;
+        }
+        case 'BAN': {
+          await actionBanUser(formData, request);
+          break;
+        }
 
-  const requestValue = await (async () => {
-    switch (formAction) {
-      case 'REPUTATION': {
-        return await actionImportReviews(API, formData, request.headers.get('cookie') ?? '');
+        default: {
+          throw new Error('Did not match formAction');
+        }
       }
-      case 'BAN': {
-        return await actionBanUser(API, formData, request.headers.get('cookie') ?? '');
-      }
+    })();
 
-      default: {
-        throw new Error('Did not match formAction');
-      }
-    }
-  })();
-
-
-  if (requestValue.status === 200 || requestValue.status === 204) {
     return json({ ok: formAction });
+  } catch (error) {
+    return json({ error } as { error: string })
   }
-
-  const requestData = await requestValue.json() as { message: string, code: number } | undefined;
-  return json({ error: requestData?.message ?? 'unknown error happened' })
 };
 
 export default function DashboardSingleUser() {

@@ -25,66 +25,51 @@ import { Separator } from "@/components/ui/separator"
 import { actionSendMessage } from "./actionSendMessage";
 import { actionResolveDispute } from "./actionResolveDispute";
 import { actionCancelTrade } from "./actionCancelTrade";
-
-const { API } = process.env;
+import apiRequestHandler from "@/functions/apiRequestHandler";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-  if (API === undefined) {
-    throw new Error('Missing API .env variable');
-  }
-
-  const apiRequest = await fetch(`${API}/admin/contracts/${params.id ?? ''}`, {
-    method: 'GET',
-    headers: {
-      'Cookie': request.headers.get('cookie') ?? ''
-    }
-  });
-
-  if (apiRequest.status === 200) {
-    const apiData = await apiRequest.json() as AdminContractDetail;
+  try {
+    const apiRequestData = await apiRequestHandler<AdminContractDetail>('GET', `/admin/contracts/${params.id ?? ''}`, undefined, request);
 
     return json({
-      trade: apiData
+      trade: apiRequestData
+    })
+  } catch (error) {
+    console.error(error);
+
+    return json({
+      trade: null,
     })
   }
 
-  return json({
-    trade: null,
-  })
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  if (API === undefined) {
-    throw new Error('Missing API .env variable');
-  }
-
   const formData = await request.formData();
   const formAction = formData.get('formAction') as null | 'SEND_MESSAGE' | 'CANCEL_TRADE' | 'RESOLVE_DISPUTE';
 
-  const requestValue = await (async () => {
-    switch (formAction) {
-      case 'SEND_MESSAGE': {
-        return await actionSendMessage(API, formData, request.headers.get('cookie') ?? '');
+  try {
+    await (async () => {
+      switch (formAction) {
+        case 'SEND_MESSAGE': {
+          return await actionSendMessage(formData, request);
+        }
+        case 'CANCEL_TRADE': {
+          return await actionCancelTrade(formData, request);
+        }
+        case 'RESOLVE_DISPUTE': {
+          return await actionResolveDispute(formData, request);
+        }
+        default: {
+          throw new Error('Did not match formAction');
+        }
       }
-      case 'CANCEL_TRADE': {
-        return await actionCancelTrade(API, formData, request.headers.get('cookie') ?? '');
-      }
-      case 'RESOLVE_DISPUTE': {
-        return await actionResolveDispute(API, formData, request.headers.get('cookie') ?? '');
-      }
-      default: {
-        throw new Error('Did not match formAction');
-      }
-    }
-  })();
+    })();
 
-  if (requestValue.status === 200 || requestValue.status === 204) {
     return json({ ok: formAction });
+  } catch (error) {
+    return json({ error } as { error: string })
   }
-
-  const requestData = await requestValue.json() as { message: string, code: number } | undefined;
-  console.log(requestData)
-  return json({ error: requestData?.message ?? 'unknown error happened' })
 };
 
 const DataWrapper = styled.div`

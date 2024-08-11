@@ -2,46 +2,28 @@ import { DashboardSidebar } from "./ui/sidebar";
 import { DashboardHeader } from "./ui/header";
 import { Outlet } from "@remix-run/react";
 import { ActionFunctionArgs, LoaderFunctionArgs, json, redirect } from "@remix-run/node";
-const { API } = process.env;
+import apiRequestHandler from "@/functions/apiRequestHandler";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  if (API === undefined) {
-    throw new Error('Missing API .env variable');
-  }
+  try {
+    await apiRequestHandler('GET', '/auth/me', undefined, request);
 
-  const apiRequest = await fetch(API + '/auth/me', {
-    method: 'GET',
-    headers: {
-      'Cookie': request.headers.get('cookie') ?? ''
-    }
-  });
-
-  if (apiRequest.status === 403) {
+    return null;
+  } catch (error) {
+    console.error(error);
     return redirect('/login');
   }
-
-  return null;
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
 
-  if (API === undefined) {
-    throw new Error('Missing API .env variable');
+  try {
+    await apiRequestHandler('POST', `/auth/logout`, undefined, request);
+    json({ ok: true })
+  } catch (error) {
+    console.error(error);
+    return json({ error } as { error: string })
   }
-
-  const apiRequest = await fetch(`${API}/auth/logout`, {
-    method: 'POST',
-    headers: {
-      'Cookie': request.headers.get('cookie') ?? ''
-    },
-  });
-
-  if (apiRequest.status === 200 || apiRequest.status === 204) {
-    return json({ ok: true });
-  }
-
-  const requestData = await apiRequest.json() as { message: string, code: number } | undefined;
-  return json({ error: requestData?.message ?? 'unknown error happened' })
 };
 
 export default function DashboardLayout() {

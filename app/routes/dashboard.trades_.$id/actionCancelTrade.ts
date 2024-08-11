@@ -1,13 +1,10 @@
-export const actionCancelTrade = async (API: string, formData: FormData, cookie: string) => {
+import apiRequestHandler from "@/functions/apiRequestHandler";
+
+export const actionCancelTrade = async (formData: FormData, request: Request) => {
   // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-  return await fetch(`${API}/admin/contracts/${formData.get('tradeId')}/cancel`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      password: formData.get('password'),
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      'Cookie': cookie
-    },
-  });
+  return await apiRequestHandler('PATCH', `/admin/contracts/${formData.get('tradeId')}/cancel`, {
+    password: formData.get('password'),
+  },
+    request
+  );
 }

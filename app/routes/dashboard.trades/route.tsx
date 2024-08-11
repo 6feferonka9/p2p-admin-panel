@@ -4,6 +4,7 @@ import { LoaderFunctionArgs } from "@remix-run/node";
 const { API } = process.env;
 import { PaginatedAdminContracts } from '@p2pcoins/api-sdk'
 import { TradesListCard } from "./ui/card";
+import apiRequestHandler from "@/functions/apiRequestHandler";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (API === undefined) {
@@ -19,31 +20,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }, {}) as Record<string, 'string' | undefined>;
 
-  const apiRequest = await fetch(`${API}/admin/contracts?${queryString}`, {
-    method: 'GET',
-    headers: {
-      'Cookie': request.headers.get('cookie') ?? ''
-    }
-  });
-
-  if (apiRequest.status === 200) {
-    const apiData = await apiRequest.json() as PaginatedAdminContracts;
+  try {
+    const apiRequestData = await apiRequestHandler<PaginatedAdminContracts>('GET', `/admin/contracts?${queryString}`, undefined, request);
 
     return {
       queryObject,
       trades: {
-        ...apiData,
-        data: apiData.data.map((item) => ({
+        ...apiRequestData,
+        data: apiRequestData.data.map((item) => ({
           ...item,
           createdAt: new Date(item.createdAt).toLocaleString('sk').split(' ').slice(0, -1).join('')
         }))
       }
     }
-  }
+  } catch (error) {
+    console.error(error);
 
-  return {
-    queryObject,
-    trades: null,
+    return {
+      queryObject,
+      trades: null,
+    }
   }
 };
 

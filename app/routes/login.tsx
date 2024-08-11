@@ -13,47 +13,29 @@ import { Label } from "@/components/ui/label"
 import { ActionFunctionArgs, json, redirect } from "@remix-run/node";
 import { toast } from "sonner"
 import { useEffect } from "react";
-import { LoginUser } from "@p2pcoins/api-sdk";
-const { API } = process.env;
-
-if (API === undefined) {
-  throw new Error('Missing API .env variable');
-}
+import apiRequestHandler from "@/functions/apiRequestHandler";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
 
-  const bodyData = ['email', 'password'].reduce((prev, cur) => {
-    return {
-      ...prev,
-      [cur]: formData.get(cur)
-    }
-  }, {
-    userType: 'admin'
-  }) as LoginUser;
-
-  const apiRequest = await fetch(`${API}/auth/login`, {
-    method: 'POST',
-    body: JSON.stringify({
-      ...bodyData,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-
-  if (apiRequest.status === 200) {
-    return redirect('/dashboard/users', {
-      headers: [
-        ["Set-Cookie", apiRequest.headers.getAll('set-cookie')[0]],
-        ["Set-Cookie", apiRequest.headers.getAll('set-cookie')[1]]
-      ],
-    });
+  const bodyData = {
+    userType: 'admin',
+    email: formData.get('email'),
+    password: formData.get('password')
   }
 
-  const requestData = await apiRequest.json() as { message: string, code: number } | undefined;
-  return json({ error: requestData?.message ?? 'unknown error happened' })
+  try {
+    await apiRequestHandler('POST', '/auth/login', bodyData, undefined, (res) => {
+      return redirect('/dashboard/users', {
+        headers: [
+          ["Set-Cookie", res.headers.getAll('set-cookie')[0]],
+          ["Set-Cookie", res.headers.getAll('set-cookie')[1]]
+        ],
+      });
+    });
+  } catch (error) {
+    return json({ error } as { error: string })
+  }
 };
 
 export default function LoginPage() {
